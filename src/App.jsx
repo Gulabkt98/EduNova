@@ -12,6 +12,7 @@ import { setToken } from "./slices/authSlice"
 import { setUser } from "./slices/profileSlice"
 import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgetPassword";
+import Contact from "./pages/Contact";
 
 
 
@@ -57,6 +58,7 @@ function App() {
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/contact" element={<Contact />} />
         <Route
           path="login"
           element={
