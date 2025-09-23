@@ -13,6 +13,7 @@ import { setUser } from "./slices/profileSlice"
 import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgetPassword";
 import Contact from "./pages/Contact";
+//import About from "./pages/About";
 
 
 
@@ -59,6 +60,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/contact" element={<Contact />} />
+        {/* <Route path="/about" element={<About />} /> */}
         <Route
           path="login"
           element={

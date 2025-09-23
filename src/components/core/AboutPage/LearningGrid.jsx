@@ -1,6 +1,6 @@
 import React from "react";
-import HighlightText from "../../../components/core/HomePage/HighlightText";
-import CTAButton from "../../../components/core/HomePage/Button";
+import HighlightText from "../Homepage/HighlightText";
+import CTAButton from "../Homepage/Button";
 
 const LearningGridArray = [
   {
