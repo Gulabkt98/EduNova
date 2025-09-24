@@ -1,28 +1,34 @@
-const User = require("../models/User");
-const Profile = require("../models/Profile");
-const OTP = require("../models/OTP");
-const otpGenerator = require("otp-generator");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-require("dotenv").config();
-// otpEmail = require("../mail/templates/otpEmail");
-//   const mailSender = require("../utils/mailSender");
+// ===============================
+// Auth.js Controller
+// Handles authentication logic such as OTP generation, user registration, login, and password change.
+// ===============================
+
+const User = require("../models/User"); // Import User model for user data
+const Profile = require("../models/Profile"); // Import Profile model for additional user info
+const OTP = require("../models/OTP"); // Import OTP model to store and validate OTPs
+const otpGenerator = require("otp-generator"); // Library to generate OTPs
+const bcrypt = require("bcrypt"); // Library to hash/compare passwords securely
+const jwt = require("jsonwebtoken"); // For generating and verifying JSON Web Tokens
+require("dotenv").config(); // Load environment variables from .env file
+
+// otpEmail = require("../mail/templates/otpEmail"); // Example: could be used for OTP email template
+// const mailSender = require("../utils/mailSender"); // Example: custom mail utility for sending emails
 
 // ------------------- SEND OTP -------------------
 exports.sendOTP = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email } = req.body; // Extract email from request body
 
-    // Check if user already exists
+    // Check if user already exists in DB
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: "User already registered",
+        message: "User already registered", // Prevent sending OTP to already registered users
       });
     }
 
-    // Generate OTP
+    // Generate a 6-digit OTP (only numbers allowed here)
     let otp = otpGenerator.generate(6, {
       upperCaseAlphabets: false,
       lowerCaseAlphabets: false,
@@ -31,7 +37,7 @@ exports.sendOTP = async (req, res) => {
 
     console.log("OTP generated:", otp);
 
-    // Optional: ensure OTP is unique across DB (can be skipped if short-lived)
+    // Ensure OTP is unique in the DB (edge case, since OTP is short-lived)
     let result = await OTP.findOne({ otp });
     while (result) {
       otp = otpGenerator.generate(6, {
@@ -42,18 +48,18 @@ exports.sendOTP = async (req, res) => {
       result = await OTP.findOne({ otp });
     }
 
-    // Save OTP (pre-save middleware sends email before saving)
+    // Save OTP into DB (could trigger pre-save middleware to send OTP email)
     await OTP.create({ email, otp });
 
     return res.status(200).json({
       success: true,
-      message: "OTP sent successfully",
+      message: "OTP sent successfully", // Inform frontend
     });
   } catch (error) {
     console.error(error);
     return res.status(500).json({
       success: false,
-      message: `Internal error while sending OTP: ${error.message}`,
+      message: `Internal error while sending OTP: ${error.message}`, // Send proper error message
     });
   }
 };
@@ -61,6 +67,7 @@ exports.sendOTP = async (req, res) => {
 // ------------------- SIGN UP -------------------
 exports.signUp = async (req, res) => {
   try {
+    // Extract fields from request body
     const {
       firstName,
       lastName,
@@ -72,7 +79,7 @@ exports.signUp = async (req, res) => {
       otp,
     } = req.body;
 
-    // Validate input
+    // Validate required fields
     if (!firstName || !lastName || !email || !password || !confirmPassword || !otp) {
       return res.status(400).json({
         success: false,
@@ -80,6 +87,7 @@ exports.signUp = async (req, res) => {
       });
     }
 
+    // Ensure password and confirm password match
     if (password !== confirmPassword) {
       return res.status(400).json({
         success: false,
@@ -87,7 +95,7 @@ exports.signUp = async (req, res) => {
       });
     }
 
-    // Check if user exists
+    // Check if user already exists with this email
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -96,7 +104,7 @@ exports.signUp = async (req, res) => {
       });
     }
 
-    // Get most recent OTP
+    // Fetch the most recent OTP for this email
     const recentOtpDoc = await OTP.findOne({ email }).sort({ createdAt: -1 });
     if (!recentOtpDoc) {
       return res.status(400).json({
@@ -105,6 +113,7 @@ exports.signUp = async (req, res) => {
       });
     }
 
+    // Verify entered OTP matches the one in DB
     if (otp !== recentOtpDoc.otp) {
       return res.status(400).json({
         success: false,
@@ -112,10 +121,10 @@ exports.signUp = async (req, res) => {
       });
     }
 
-    // Hash password
+    // Hash password before saving user
     const hashPassword = await bcrypt.hash(password, 10);
 
-    // Create profile
+    // Create an empty profile linked to the user
     const profileDetails = await Profile.create({
       gender: null,
       dateOfBirth: null,
@@ -123,7 +132,7 @@ exports.signUp = async (req, res) => {
       contactNumber: contactNumber || null,
     });
 
-    // Create user
+    // Create new user document
     const user = await User.create({
       firstName,
       lastName,
@@ -131,11 +140,11 @@ exports.signUp = async (req, res) => {
       contactNumber,
       password: hashPassword,
       accountType,
-      additionalDetails: profileDetails._id,
-      image: `https://api.dicebear.com/5.x/initials/svg?seed=${firstName} ${lastName}`,
+      additionalDetails: profileDetails._id, // Linking profile
+      image: `https://api.dicebear.com/5.x/initials/svg?seed=${firstName} ${lastName}`, // Default avatar
     });
 
-    // Remove sensitive data
+    // Remove sensitive info before sending response
     user.password = undefined;
 
     return res.status(201).json({
@@ -153,12 +162,11 @@ exports.signUp = async (req, res) => {
 };
 
 // ------------------- LOGIN -------------------
-
- 
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body; // Extract login credentials
 
+    // Ensure both fields are provided
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -166,6 +174,7 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Find user and populate profile details
     const user = await User.findOne({ email }).populate("additionalDetails");
     if (!user) {
       return res.status(401).json({
@@ -174,6 +183,7 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Compare provided password with hashed password
     const isPasswordMatch = await bcrypt.compare(password, user.password);
     if (!isPasswordMatch) {
       return res.status(401).json({
@@ -182,24 +192,29 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Create JWT payload
     const payload = {
       email: user.email,
       _id: user._id,
       accountType: user.accountType,
     };
 
+    // Generate JWT token (valid for 2 hours)
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "2h" });
 
+    // Hide password from response
     user.password = undefined;
     user.token = token;
 
+    // Cookie options (secure and httpOnly for production)
     const options = {
-      expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: process.env.NODE_ENV === "production", // Secure only in production
       sameSite: "Strict",
     };
 
+    // Send response with cookie + token
     return res.cookie("token", token, options).status(200).json({
       success: true,
       token,
@@ -218,8 +233,10 @@ exports.login = async (req, res) => {
 // ------------------- CHANGE PASSWORD -------------------
 exports.changePassword = async (req, res) => {
   try {
+    // Extract old and new passwords
     const { oldPassword, newPassword, confirmNewPassword } = req.body;
 
+    // Validate required fields
     if (!oldPassword || !newPassword || !confirmNewPassword) {
       return res.status(400).json({
         success: false,
@@ -227,6 +244,7 @@ exports.changePassword = async (req, res) => {
       });
     }
 
+    // Ensure new password and confirm password match
     if (newPassword !== confirmNewPassword) {
       return res.status(400).json({
         success: false,
@@ -234,8 +252,10 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    const userId = req.user.id; // From auth middleware
+    // User ID will be set from auth middleware
+    const userId = req.user.id;
     const user = await User.findById(userId);
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -243,6 +263,7 @@ exports.changePassword = async (req, res) => {
       });
     }
 
+    // Verify old password before updating
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {
       return res.status(401).json({
@@ -251,6 +272,7 @@ exports.changePassword = async (req, res) => {
       });
     }
 
+    // Hash new password and update
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
 
